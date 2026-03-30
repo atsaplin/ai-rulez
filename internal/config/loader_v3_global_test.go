@@ -114,3 +114,55 @@ func TestLoadConfigV3FromDir_missing_config_file_returns_error(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no config file found")
 }
+
+func TestLoadConfigV3FromDir_nonexistent_configDir_returns_error(t *testing.T) {
+	baseDir := t.TempDir()
+	configDir := filepath.Join(baseDir, "does-not-exist")
+
+	_, err := LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no config file found")
+}
+
+func TestLoadConfigV3FromDir_nonexistent_baseDir_succeeds(t *testing.T) {
+	// baseDir is only used at write time, not load time
+	configDir := t.TempDir()
+	setupConfigDir(t, configDir)
+	baseDir := filepath.Join(t.TempDir(), "nonexistent")
+
+	cfg, err := LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	assert.Equal(t, baseDir, cfg.BaseDir)
+}
+
+func TestLoadConfigV3FromDir_loads_hooks(t *testing.T) {
+	configDir := t.TempDir()
+	baseDir := t.TempDir()
+
+	setupConfigDir(t, configDir)
+
+	hooksContent := `stop:
+  - command: "echo done"
+`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(configDir, "hooks.yaml"),
+		[]byte(hooksContent), 0o644,
+	))
+
+	cfg, err := LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	require.NotNil(t, cfg.Hooks)
+	assert.Len(t, cfg.Hooks.Stop, 1)
+}
+
+func TestLoadConfigV3FromDir_relative_paths_resolve(t *testing.T) {
+	// Create a config dir with a relative path component
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, "a", "..", "a")
+	setupConfigDir(t, filepath.Join(tempDir, "a"))
+
+	cfg, err := LoadConfigV3FromDir(context.Background(), configDir, tempDir)
+	require.NoError(t, err)
+	// BaseDir should be the resolved absolute path
+	assert.Equal(t, tempDir, cfg.BaseDir)
+}

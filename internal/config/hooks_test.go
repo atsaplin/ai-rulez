@@ -101,6 +101,67 @@ func TestHooksConfigV3_Validate_nil(t *testing.T) {
 	require.NoError(t, (*HooksConfigV3)(nil).Validate())
 }
 
+func TestLoadHooksConfig_yaml_list_root_returns_error(t *testing.T) {
+	// A hooks.yaml that is a YAML list (not map) fails to unmarshal into the struct
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(dir, hooksYAMLFilename),
+		[]byte("- item1\n- item2\n"), 0o644,
+	))
+
+	_, err := LoadHooksConfig(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse hooks YAML")
+}
+
+func TestLoadHooksConfig_unknown_fields_ignored(t *testing.T) {
+	dir := t.TempDir()
+	hooksContent := `unknown_event:
+  - command: "something"
+stop:
+  - command: "echo ok"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, hooksYAMLFilename), []byte(hooksContent), 0o644))
+
+	hooks, err := LoadHooksConfig(dir)
+	require.NoError(t, err)
+	require.NotNil(t, hooks)
+	// Unknown field is silently ignored; stop is parsed
+	assert.Len(t, hooks.Stop, 1)
+}
+
+func TestLoadHooksConfig_empty_file(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, hooksYAMLFilename), []byte(""), 0o644))
+
+	hooks, err := LoadHooksConfig(dir)
+	require.NoError(t, err)
+	require.NotNil(t, hooks)
+	assert.True(t, hooks.IsEmpty())
+}
+
+func TestHooksConfigV3_EventGroups_returns_all_six(t *testing.T) {
+	hooks := &HooksConfigV3{
+		PreToolUse:   []HookEntry{{Command: "a"}},
+		PostToolUse:  []HookEntry{{Command: "b"}},
+		Stop:         []HookEntry{{Command: "c"}},
+		SessionStart: []HookEntry{{Command: "d"}},
+		PreCompact:   []HookEntry{{Command: "e"}},
+		Notification: []HookEntry{{Command: "f"}},
+	}
+	groups := hooks.EventGroups()
+	assert.Len(t, groups, 6)
+
+	names := make([]string, len(groups))
+	for i, g := range groups {
+		names[i] = g.Event
+	}
+	assert.Equal(t, []string{
+		"pre_tool_use", "post_tool_use", "stop",
+		"session_start", "pre_compact", "notification",
+	}, names)
+}
+
 func TestLoadHooksConfig_loads_empty_command_without_error(t *testing.T) {
 	// Validation is deferred to ValidateV3, not LoadHooksConfig
 	dir := t.TempDir()

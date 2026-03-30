@@ -115,6 +115,53 @@ func TestResolveEnv_no_op_refs(t *testing.T) {
 	assert.Equal(t, "value", result["PLAIN"])
 }
 
+func TestResolveEnv_context_deadline_exceeded(t *testing.T) {
+	runner := func(ctx context.Context, _ string, _ ...string) (string, error) {
+		// Simulate op hanging until context expires
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	r := newResolverWithRunner(runner)
+
+	env := map[string]string{
+		"KEY": "op://vault/item/field",
+	}
+
+	_, err := r.ResolveEnv(env)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+func TestResolveEnv_op_not_found_returns_error(t *testing.T) {
+	runner := func(_ context.Context, _ string, _ ...string) (string, error) {
+		return "", fmt.Errorf("exec: \"op\": executable file not found in $PATH")
+	}
+	r := newResolverWithRunner(runner)
+
+	env := map[string]string{
+		"KEY": "op://vault/item/field",
+	}
+
+	_, err := r.ResolveEnv(env)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "resolve secret")
+}
+
+func TestResolveEnv_single_op_ref_in_env(t *testing.T) {
+	runner := mockRunner(map[string]string{
+		"op://vault/item/key": "secret",
+	})
+	r := newResolverWithRunner(runner)
+
+	env := map[string]string{
+		"ONLY_KEY": "op://vault/item/key",
+	}
+
+	result, err := r.ResolveEnv(env)
+	require.NoError(t, err)
+	assert.Equal(t, "secret", result["ONLY_KEY"])
+}
+
 func TestResolveEnv_does_not_mutate_original(t *testing.T) {
 	runner := mockRunner(map[string]string{
 		"op://vault/item/key": "resolved",

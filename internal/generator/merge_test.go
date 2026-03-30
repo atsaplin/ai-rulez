@@ -74,6 +74,56 @@ func TestShallowMergeJSON_trailing_newline(t *testing.T) {
 	assert.Equal(t, byte('\n'), result[len(result)-1])
 }
 
+func TestShallowMergeJSON_existing_is_json_array(t *testing.T) {
+	existing := []byte(`[1,2,3]`)
+	generated := []byte(`{"key":"value"}`)
+
+	// JSON array is not a JSON object; falls back to overwrite
+	result, err := shallowMergeJSON(existing, generated)
+	require.NoError(t, err)
+	assert.Equal(t, generated, result)
+}
+
+func TestShallowMergeJSON_existing_is_json_string(t *testing.T) {
+	existing := []byte(`"hello"`)
+	generated := []byte(`{"key":"value"}`)
+
+	result, err := shallowMergeJSON(existing, generated)
+	require.NoError(t, err)
+	assert.Equal(t, generated, result)
+}
+
+func TestShallowMergeJSON_existing_is_json_number(t *testing.T) {
+	existing := []byte(`42`)
+	generated := []byte(`{"key":"value"}`)
+
+	result, err := shallowMergeJSON(existing, generated)
+	require.NoError(t, err)
+	assert.Equal(t, generated, result)
+}
+
+func TestShallowMergeJSON_existing_has_trailing_garbage(t *testing.T) {
+	existing := []byte(`{"a":"1"}garbage`)
+	generated := []byte(`{"b":"2"}`)
+
+	// json.Unmarshal succeeds on the valid prefix in some cases,
+	// but with trailing garbage it fails; falls back to overwrite
+	result, err := shallowMergeJSON(existing, generated)
+	require.NoError(t, err)
+	// Either merged or overwritten; both are acceptable
+	assert.Contains(t, string(result), `"b"`)
+}
+
+func TestShallowMergeJSON_unicode_content(t *testing.T) {
+	existing := []byte(`{"name":"héllo"}`)
+	generated := []byte(`{"emoji":"🎉"}`)
+
+	result, err := shallowMergeJSON(existing, generated)
+	require.NoError(t, err)
+	assert.Contains(t, string(result), `héllo`)
+	assert.Contains(t, string(result), `🎉`)
+}
+
 func TestShallowMergeJSON_generated_overwrites_existing_key(t *testing.T) {
 	existing := []byte(`{"hooks":{"pre":"old"},"plugins":["keep"]}`)
 	generated := []byte(`{"hooks":{"pre":"new","post":"added"}}`)
