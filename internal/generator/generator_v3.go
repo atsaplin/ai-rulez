@@ -237,9 +237,12 @@ func (g *GeneratorV3) collectMCPServersForContent(content *config.ContentTreeV3)
 				if server.Env == nil {
 					continue
 				}
-				if err := resolver.ResolveEnv(server.Env); err != nil {
+				resolved, err := resolver.ResolveEnv(server.Env)
+				if err != nil {
 					logger.Warn("Failed to resolve secrets for MCP server", "server", name, "error", err)
+					continue
 				}
+				server.Env = resolved
 			}
 		} else {
 			logger.Warn("1Password CLI (op) not found on PATH; skipping secret resolution")

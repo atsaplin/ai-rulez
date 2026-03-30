@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -104,32 +103,6 @@ func TestToClaudeSettingsHooks_format(t *testing.T) {
 	stopHooks := stopGroup["hooks"].([]interface{})
 	stopHook := stopHooks[0].(map[string]interface{})
 	assert.Equal(t, 300, stopHook["timeout"])
-}
-
-func TestMarshalHooksToJSON_produces_valid_json(t *testing.T) {
-	hooks := &HooksConfigV3{
-		SessionStart: []HookEntry{
-			{Command: "ccf session-start"},
-		},
-	}
-
-	data, err := MarshalHooksToJSON(hooks)
-	require.NoError(t, err)
-	require.NotNil(t, data)
-
-	// Verify it's valid JSON
-	var parsed map[string]interface{}
-	require.NoError(t, json.Unmarshal(data, &parsed))
-
-	hooksObj, ok := parsed["hooks"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Contains(t, hooksObj, "SessionStart")
-}
-
-func TestMarshalHooksToJSON_nil_hooks(t *testing.T) {
-	data, err := MarshalHooksToJSON(&HooksConfigV3{})
-	require.NoError(t, err)
-	assert.Nil(t, data)
 }
 
 func TestToClaudeSettingsHooks_empty(t *testing.T) {

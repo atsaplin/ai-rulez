@@ -101,61 +101,43 @@ func runGenerate(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	// Validate configuration
-	if err := cfg.ValidateV3(); err != nil {
-		fmtError(err)
-		os.Exit(1)
-	}
-
-	// Create V3 generator
-	gen := generator.NewGeneratorV3(cfg)
-	gen.ResolveSecrets = !noSecrets
-
-	if dryRun {
-		progress.PrintlnIfNotQuiet("Note: --dry-run not yet supported for V3 configs")
-		return
-	}
-
-	// Generate files
-	if err := gen.Generate(profile); err != nil {
-		fmtError(err)
-		os.Exit(1)
-	}
-}
-
-// resolveGlobalDir determines the global config directory.
-// Priority: --global-dir flag > AI_RULEZ_GLOBAL_DIR env > ~/.config/ai-rulez/
-func resolveGlobalDir() string {
-	if globalDir != "" {
-		return globalDir
-	}
-	if envDir := os.Getenv("AI_RULEZ_GLOBAL_DIR"); envDir != "" {
-		return envDir
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
-		os.Exit(1)
-	}
-	return filepath.Join(home, ".config", "ai-rulez")
+	generateFromConfig(cfg)
 }
 
 func runGlobalGenerate() {
-	ctx := context.Background()
-
-	configDir := resolveGlobalDir()
 	home, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
 		os.Exit(1)
 	}
 
+	configDir := resolveGlobalDir(home)
+
+	ctx := context.Background()
 	cfg, err := config.LoadConfigV3FromDir(ctx, configDir, home)
 	if err != nil {
 		fmtError(err)
 		os.Exit(1)
 	}
 
+	generateFromConfig(cfg)
+}
+
+// resolveGlobalDir determines the global config directory.
+// Priority: --global-dir flag > AI_RULEZ_GLOBAL_DIR env > ~/.config/ai-rulez/
+func resolveGlobalDir(home string) string {
+	if globalDir != "" {
+		return globalDir
+	}
+	if envDir := os.Getenv("AI_RULEZ_GLOBAL_DIR"); envDir != "" {
+		return envDir
+	}
+	return filepath.Join(home, ".config", "ai-rulez")
+}
+
+// generateFromConfig validates, creates a generator, and runs generation.
+// Shared by both normal and global code paths.
+func generateFromConfig(cfg *config.ConfigV3) {
 	if err := cfg.ValidateV3(); err != nil {
 		fmtError(err)
 		os.Exit(1)

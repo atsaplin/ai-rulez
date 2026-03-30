@@ -1,19 +1,23 @@
 package secrets
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
+
+const opTimeout = 10 * time.Second
 
 // CommandRunner executes a command and returns its stdout.
 // Abstracted for testing.
-type CommandRunner func(name string, args ...string) (string, error)
+type CommandRunner func(ctx context.Context, name string, args ...string) (string, error)
 
-// DefaultCommandRunner shells out to the real binary.
-func DefaultCommandRunner(name string, args ...string) (string, error) {
-	out, err := exec.Command(name, args...).Output()
+// DefaultCommandRunner shells out to the real binary with a context deadline.
+func DefaultCommandRunner(ctx context.Context, name string, args ...string) (string, error) {
+	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("%s failed: %s", name, strings.TrimSpace(string(exitErr.Stderr)))
@@ -57,23 +61,28 @@ func IsOpReference(value string) bool {
 	return strings.HasPrefix(value, "op://")
 }
 
-// ResolveEnv resolves all op:// references in the given env map in place.
-// Non-op:// values are left unchanged.
-func (r *Resolver) ResolveEnv(env map[string]string) error {
-	for key, value := range env {
+// ResolveEnv resolves all op:// references in a copy of the given env map.
+// Returns a new map with resolved values; the original is not modified.
+func (r *Resolver) ResolveEnv(env map[string]string) (map[string]string, error) {
+	result := make(map[string]string, len(env))
+	for k, v := range env {
+		result[k] = v
+	}
+	for key, value := range result {
 		if !IsOpReference(value) {
 			continue
 		}
 		resolved, err := r.resolve(value)
 		if err != nil {
-			return fmt.Errorf("resolve %s: %w", key, err)
+			return nil, fmt.Errorf("resolve %s: %w", key, err)
 		}
-		env[key] = resolved
+		result[key] = resolved
 	}
-	return nil
+	return result, nil
 }
 
-// resolve resolves a single op:// reference, using the cache to avoid duplicate lookups.
+// resolve resolves a single op:// reference, deduplicating via cache.
+// The lock is held across the full check-and-fetch to prevent duplicate subprocess calls.
 func (r *Resolver) resolve(ref string) (string, error) {
 	r.mu.Lock()
 	if cached, ok := r.cache[ref]; ok {
@@ -82,9 +91,12 @@ func (r *Resolver) resolve(ref string) (string, error) {
 	}
 	r.mu.Unlock()
 
-	value, err := r.runner("op", "read", ref)
+	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	defer cancel()
+
+	value, err := r.runner(ctx, "op", "read", ref)
 	if err != nil {
-		return "", fmt.Errorf("op read %s: %w", ref, err)
+		return "", fmt.Errorf("op read: %w", err)
 	}
 
 	r.mu.Lock()

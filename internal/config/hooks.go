@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -124,16 +123,3 @@ func LoadHooksConfig(configDir string) (*HooksConfigV3, error) {
 	return &hooks, nil
 }
 
-// MarshalHooksToJSON marshals the hooks config to pretty-printed JSON for embedding in settings.json.
-func MarshalHooksToJSON(hooks *HooksConfigV3) ([]byte, error) {
-	claudeHooks := hooks.ToClaudeSettingsHooks()
-	if claudeHooks == nil {
-		return nil, nil
-	}
-
-	wrapper := map[string]interface{}{
-		"hooks": claudeHooks,
-	}
-
-	return json.MarshalIndent(wrapper, "", "  ")
-}
