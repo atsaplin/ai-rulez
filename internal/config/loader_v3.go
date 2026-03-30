@@ -147,6 +147,13 @@ func LoadConfigV3FromDir(ctx context.Context, configDir string, baseDir string) 
 	}
 	config.MCPServers = rootMCPServers
 
+	// Load hooks config (optional, don't fail if missing)
+	hooks, err := LoadHooksConfig(absConfigDir)
+	if err != nil {
+		logger.Warn("Failed to load hooks config", "error", err)
+	}
+	config.Hooks = hooks
+
 	// Scan content directories
 	contentTree, err := ScanContentTree(absConfigDir)
 	if err != nil {

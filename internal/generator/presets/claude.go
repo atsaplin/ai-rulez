@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -49,6 +50,7 @@ func (g *ClaudePresetGenerator) GetOutputPaths(baseDir string) []string {
 		filepath.Join(baseDir, ".claude"),
 		filepath.Join(baseDir, ".claude", "skills"),
 		filepath.Join(baseDir, ".claude", "agents"),
+		filepath.Join(baseDir, ".claude", "settings.json"),
 	}
 }
 
@@ -121,7 +123,43 @@ func (g *ClaudePresetGenerator) Generate(content *config.ContentTreeV3, baseDir 
 		}
 	}
 
+	// Generate settings.json with hooks if hooks are configured
+	if cfg.Hooks != nil && !cfg.Hooks.IsEmpty() {
+		settingsOutputs, err := g.generateHooksSettings(cfg, baseDir)
+		if err != nil {
+			return nil, fmt.Errorf("generate hooks settings: %w", err)
+		}
+		outputs = append(outputs, settingsOutputs...)
+	}
+
 	return outputs, nil
+}
+
+// generateHooksSettings emits a .claude/settings.json with Claude-native hooks.
+// The output uses Merge=true so non-hook keys in the existing file survive.
+func (g *ClaudePresetGenerator) generateHooksSettings(cfg *config.ConfigV3, baseDir string) ([]config.OutputFileV3, error) {
+	claudeHooks := cfg.Hooks.ToClaudeSettingsHooks()
+	if claudeHooks == nil {
+		return nil, nil
+	}
+
+	wrapper := map[string]interface{}{
+		"hooks": claudeHooks,
+	}
+
+	data, err := json.MarshalIndent(wrapper, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal hooks settings: %w", err)
+	}
+	data = append(data, '\n')
+
+	return []config.OutputFileV3{
+		{
+			Path:    filepath.Join(baseDir, ".claude", "settings.json"),
+			Content: string(data),
+			Merge:   true,
+		},
+	}, nil
 }
 
 func (g *ClaudePresetGenerator) generateSkillFiles(skill config.ContentFile, content *config.ContentTreeV3, baseDir string, cfg *config.ConfigV3) ([]config.OutputFileV3, error) {

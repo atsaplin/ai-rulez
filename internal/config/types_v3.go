@@ -24,6 +24,7 @@ type ConfigV3 struct {
 	BaseDir    string                  `yaml:"-" json:"-"`
 	Content    *ContentTreeV3          `yaml:"-" json:"-"`
 	MCPServers map[string]*MCPServerV3 `yaml:"-" json:"-"`
+	Hooks      *HooksConfigV3          `yaml:"-" json:"-"` // Loaded from hooks.yaml
 }
 
 // HeaderConfig represents header style configuration for generated files
