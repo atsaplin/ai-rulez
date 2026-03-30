@@ -229,23 +229,20 @@ func (g *GeneratorV3) collectMCPServersForContent(content *config.ContentTreeV3)
 		}
 	}
 
-	// Resolve op:// references if enabled
+	// Resolve op:// references if enabled.
+	// If op is not on PATH, the first resolve call fails with a clear error.
 	if g.ResolveSecrets {
 		resolver := secrets.NewResolver()
-		if resolver.IsAvailable() {
-			for name, server := range collected {
-				if server.Env == nil {
-					continue
-				}
-				resolved, err := resolver.ResolveEnv(server.Env)
-				if err != nil {
-					logger.Warn("Failed to resolve secrets for MCP server", "server", name, "error", err)
-					continue
-				}
-				server.Env = resolved
+		for name, server := range collected {
+			if server.Env == nil {
+				continue
 			}
-		} else {
-			logger.Warn("1Password CLI (op) not found on PATH; skipping secret resolution")
+			resolved, err := resolver.ResolveEnv(server.Env)
+			if err != nil {
+				logger.Warn("Failed to resolve secrets for MCP server", "server", name, "error", err)
+				continue
+			}
+			server.Env = resolved
 		}
 	}
 

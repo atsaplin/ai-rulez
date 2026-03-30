@@ -50,12 +50,6 @@ func NewResolverWithRunner(runner CommandRunner) *Resolver {
 	}
 }
 
-// IsAvailable returns true if the `op` CLI is on PATH.
-func (r *Resolver) IsAvailable() bool {
-	_, err := exec.LookPath("op")
-	return err == nil
-}
-
 // IsOpReference returns true if the value starts with "op://".
 func IsOpReference(value string) bool {
 	return strings.HasPrefix(value, "op://")
