@@ -23,6 +23,8 @@ var (
 	skipCLIMCP      bool
 	profile         string
 	autoMigrate     string // "true", "false", or "ask" (default)
+	globalMode      bool
+	globalDir       string
 )
 
 var GenerateCmd = &cobra.Command{
@@ -44,10 +46,17 @@ func init() {
 	GenerateCmd.Flags().BoolVar(&skipCLIMCP, "skip-cli-mcp", false, "Skip configuring CLI-based MCP tools (alias)")
 	GenerateCmd.Flags().StringVar(&profile, "profile", "", "Profile to generate (V3 only, default: from config or 'default')")
 	GenerateCmd.Flags().StringVar(&autoMigrate, "auto-migrate", "ask", "Auto-migrate V2 config: true (auto-migrate), false (skip), ask (prompt)")
+	GenerateCmd.Flags().BoolVar(&globalMode, "global", false, "Generate from global config (~/.config/ai-rulez/) and write output to $HOME")
+	GenerateCmd.Flags().StringVar(&globalDir, "global-dir", "", "Override global config directory (default: ~/.config/ai-rulez/, env: AI_RULEZ_GLOBAL_DIR)")
 }
 
 func runGenerate(cmd *cobra.Command, args []string) {
 	progress.SetQuiet(viper.GetBool("quiet"))
+
+	if globalMode {
+		runGlobalGenerate()
+		return
+	}
 
 	workingDir := "."
 	if len(args) > 0 {
@@ -105,6 +114,57 @@ func runGenerate(cmd *cobra.Command, args []string) {
 	}
 
 	// Generate files
+	if err := gen.Generate(profile); err != nil {
+		fmtError(err)
+		os.Exit(1)
+	}
+}
+
+// resolveGlobalDir determines the global config directory.
+// Priority: --global-dir flag > AI_RULEZ_GLOBAL_DIR env > ~/.config/ai-rulez/
+func resolveGlobalDir() string {
+	if globalDir != "" {
+		return globalDir
+	}
+	if envDir := os.Getenv("AI_RULEZ_GLOBAL_DIR"); envDir != "" {
+		return envDir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
+		os.Exit(1)
+	}
+	return filepath.Join(home, ".config", "ai-rulez")
+}
+
+func runGlobalGenerate() {
+	ctx := context.Background()
+
+	configDir := resolveGlobalDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	cfg, err := config.LoadConfigV3FromDir(ctx, configDir, home)
+	if err != nil {
+		fmtError(err)
+		os.Exit(1)
+	}
+
+	if err := cfg.ValidateV3(); err != nil {
+		fmtError(err)
+		os.Exit(1)
+	}
+
+	gen := generator.NewGeneratorV3(cfg)
+
+	if dryRun {
+		progress.PrintlnIfNotQuiet("Note: --dry-run not yet supported for V3 configs")
+		return
+	}
+
 	if err := gen.Generate(profile); err != nil {
 		fmtError(err)
 		os.Exit(1)

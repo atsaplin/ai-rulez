@@ -72,8 +72,9 @@ func SetResolveIncludesCallback(fn ResolveIncludesCallback) {
 	resolveIncludesFunc = fn
 }
 
-// LoadConfigV3 loads a V3 configuration from the specified base directory
-// The baseDir should contain a .ai-rulez/ subdirectory with config.yaml or config.json
+// LoadConfigV3 loads a V3 configuration from the specified base directory.
+// The baseDir should contain a .ai-rulez/ subdirectory with config.yaml or config.json.
+// Generated output is written relative to baseDir.
 func LoadConfigV3(ctx context.Context, baseDir string) (*ConfigV3, error) {
 	absDir, err := filepath.Abs(baseDir)
 	if err != nil {
@@ -104,17 +105,42 @@ func LoadConfigV3(ctx context.Context, baseDir string) (*ConfigV3, error) {
 			Errorf(".ai-rulez exists but is not a directory")
 	}
 
+	return LoadConfigV3FromDir(ctx, configDir, absDir)
+}
+
+// LoadConfigV3FromDir loads a V3 configuration from an explicit config directory.
+// configDir is the directory containing config.yaml, rules/, skills/, etc.
+// baseDir is the directory where generated output will be written (used as BaseDir on ConfigV3).
+// This allows the config source and the output target to differ, which is needed for
+// global mode where config lives in ~/.config/ai-rulez/ but output goes to $HOME.
+func LoadConfigV3FromDir(ctx context.Context, configDir string, baseDir string) (*ConfigV3, error) {
+	absConfigDir, err := filepath.Abs(configDir)
+	if err != nil {
+		return nil, oops.
+			With("path", configDir).
+			Hint("Check if the directory path is valid and accessible").
+			Wrapf(err, "resolve config directory path")
+	}
+
+	absBaseDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		return nil, oops.
+			With("path", baseDir).
+			Hint("Check if the directory path is valid and accessible").
+			Wrapf(err, "resolve base directory path")
+	}
+
 	// Load config file (try YAML first, then JSON)
-	config, err := loadConfigFile(configDir)
+	config, err := loadConfigFile(absConfigDir)
 	if err != nil {
 		return nil, err
 	}
 
 	// Set runtime fields
-	config.BaseDir = absDir
+	config.BaseDir = absBaseDir
 
-	// Load root MCP servers (optional - don't fail if missing)
-	rootMCPServers, err := loadMCPServers(configDir)
+	// Load root MCP servers (optional, don't fail if missing)
+	rootMCPServers, err := loadMCPServers(absConfigDir)
 	if err != nil {
 		logger.Warn("Failed to load root MCP servers", "error", err)
 		rootMCPServers = make(map[string]*MCPServerV3)
@@ -122,26 +148,26 @@ func LoadConfigV3(ctx context.Context, baseDir string) (*ConfigV3, error) {
 	config.MCPServers = rootMCPServers
 
 	// Scan content directories
-	contentTree, err := ScanContentTree(configDir)
+	contentTree, err := ScanContentTree(absConfigDir)
 	if err != nil {
 		return nil, err
 	}
 	config.Content = contentTree
 
-	// Load builtins (lowest priority — loaded first so includes and local override them)
+	// Load builtins (lowest priority, loaded first so includes and local override them)
 	// Only load when the builtins field is explicitly configured in the config file
 	if config.Builtins.IsEnabled() && !config.Builtins.IsNone() {
 		loadBuiltins(config)
 	}
 
-	if err := resolveIncludesIfNeeded(ctx, configDir, config); err != nil {
+	if err := resolveIncludesIfNeeded(ctx, absConfigDir, config); err != nil {
 		return nil, err
 	}
 
 	// Load domain-specific MCP servers
 	for domainName, domain := range config.Content.Domains {
 		domainMCPServers, err := loadDomainMCPServers(
-			filepath.Join(configDir, domainsDir, domainName),
+			filepath.Join(absConfigDir, domainsDir, domainName),
 		)
 		if err != nil {
 			logger.Warn("Failed to load MCP servers", "domain", domainName, "error", err)
