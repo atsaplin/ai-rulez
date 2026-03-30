@@ -10,6 +10,7 @@ import (
 	"github.com/Goldziher/ai-rulez/internal/config"
 	"github.com/Goldziher/ai-rulez/internal/generator/presets" // Import to register presets and access MCPPresetGenerator
 	"github.com/Goldziher/ai-rulez/internal/logger"
+	"github.com/Goldziher/ai-rulez/internal/secrets"
 	"github.com/samber/oops"
 )
 
@@ -17,7 +18,8 @@ const defaultProfileName = "default"
 
 // GeneratorV3 handles V3 configuration generation
 type GeneratorV3 struct {
-	config *config.ConfigV3
+	config         *config.ConfigV3
+	ResolveSecrets bool // When true, resolve op:// references in MCP server env vars
 }
 
 // NewGeneratorV3 creates a new V3 generator
@@ -224,6 +226,23 @@ func (g *GeneratorV3) collectMCPServersForContent(content *config.ContentTreeV3)
 				// Domain servers override root servers by name
 				collected[name] = server
 			}
+		}
+	}
+
+	// Resolve op:// references if enabled
+	if g.ResolveSecrets {
+		resolver := secrets.NewResolver()
+		if resolver.IsAvailable() {
+			for name, server := range collected {
+				if server.Env == nil {
+					continue
+				}
+				if err := resolver.ResolveEnv(server.Env); err != nil {
+					logger.Warn("Failed to resolve secrets for MCP server", "server", name, "error", err)
+				}
+			}
+		} else {
+			logger.Warn("1Password CLI (op) not found on PATH; skipping secret resolution")
 		}
 	}
 

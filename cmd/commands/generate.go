@@ -25,6 +25,7 @@ var (
 	autoMigrate     string // "true", "false", or "ask" (default)
 	globalMode      bool
 	globalDir       string
+	noSecrets       bool
 )
 
 var GenerateCmd = &cobra.Command{
@@ -48,6 +49,7 @@ func init() {
 	GenerateCmd.Flags().StringVar(&autoMigrate, "auto-migrate", "ask", "Auto-migrate V2 config: true (auto-migrate), false (skip), ask (prompt)")
 	GenerateCmd.Flags().BoolVar(&globalMode, "global", false, "Generate from global config (~/.config/ai-rulez/) and write output to $HOME")
 	GenerateCmd.Flags().StringVar(&globalDir, "global-dir", "", "Override global config directory (default: ~/.config/ai-rulez/, env: AI_RULEZ_GLOBAL_DIR)")
+	GenerateCmd.Flags().BoolVar(&noSecrets, "no-secrets", false, "Skip resolving op:// secret references in MCP server env vars")
 }
 
 func runGenerate(cmd *cobra.Command, args []string) {
@@ -107,6 +109,7 @@ func runGenerate(cmd *cobra.Command, args []string) {
 
 	// Create V3 generator
 	gen := generator.NewGeneratorV3(cfg)
+	gen.ResolveSecrets = !noSecrets
 
 	if dryRun {
 		progress.PrintlnIfNotQuiet("Note: --dry-run not yet supported for V3 configs")
@@ -159,6 +162,7 @@ func runGlobalGenerate() {
 	}
 
 	gen := generator.NewGeneratorV3(cfg)
+	gen.ResolveSecrets = !noSecrets
 
 	if dryRun {
 		progress.PrintlnIfNotQuiet("Note: --dry-run not yet supported for V3 configs")
