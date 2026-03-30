@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mockRunner(responses map[string]string) CommandRunner {
+func mockRunner(responses map[string]string) commandRunner {
 	return func(_ context.Context, name string, args ...string) (string, error) {
 		if name != "op" || len(args) < 2 || args[0] != "read" {
 			return "", fmt.Errorf("unexpected command: %s %v", name, args)
@@ -34,7 +34,7 @@ func TestResolveEnv_resolves_op_references(t *testing.T) {
 	runner := mockRunner(map[string]string{
 		"op://vault/item/key": "secret-value-123",
 	})
-	r := NewResolverWithRunner(runner)
+	r := newResolverWithRunner(runner)
 
 	env := map[string]string{
 		"API_KEY":  "op://vault/item/key",
@@ -60,7 +60,7 @@ func TestResolveEnv_caches_duplicate_refs(t *testing.T) {
 		callCount.Add(1)
 		return "cached-secret", nil
 	}
-	r := NewResolverWithRunner(runner)
+	r := newResolverWithRunner(runner)
 
 	env := map[string]string{
 		"KEY1": "op://vault/item/field",
@@ -79,7 +79,7 @@ func TestResolveEnv_returns_error_on_op_failure(t *testing.T) {
 	runner := func(_ context.Context, _ string, _ ...string) (string, error) {
 		return "", fmt.Errorf("authentication required")
 	}
-	r := NewResolverWithRunner(runner)
+	r := newResolverWithRunner(runner)
 
 	env := map[string]string{
 		"SECRET": "op://vault/item/field",
@@ -91,7 +91,7 @@ func TestResolveEnv_returns_error_on_op_failure(t *testing.T) {
 }
 
 func TestResolveEnv_empty_map(t *testing.T) {
-	r := NewResolverWithRunner(mockRunner(nil))
+	r := newResolverWithRunner(mockRunner(nil))
 	result, err := r.ResolveEnv(map[string]string{})
 	require.NoError(t, err)
 	assert.Empty(t, result)
@@ -103,7 +103,7 @@ func TestResolveEnv_no_op_refs(t *testing.T) {
 		called = true
 		return "", nil
 	}
-	r := NewResolverWithRunner(runner)
+	r := newResolverWithRunner(runner)
 
 	env := map[string]string{
 		"PLAIN": "value",
@@ -119,7 +119,7 @@ func TestResolveEnv_does_not_mutate_original(t *testing.T) {
 	runner := mockRunner(map[string]string{
 		"op://vault/item/key": "resolved",
 	})
-	r := NewResolverWithRunner(runner)
+	r := newResolverWithRunner(runner)
 
 	original := map[string]string{
 		"KEY": "op://vault/item/key",

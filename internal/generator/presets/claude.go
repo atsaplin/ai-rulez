@@ -135,42 +135,33 @@ func (g *ClaudePresetGenerator) Generate(content *config.ContentTreeV3, baseDir 
 	return outputs, nil
 }
 
-// Claude hook event names as they appear in settings.json.
-const (
-	claudeEventPreToolUse  = "PreToolUse"
-	claudeEventPostToolUse = "PostToolUse"
-	claudeEventStop        = "Stop"
-	claudeEventSessionStart = "SessionStart"
-	claudeEventPreCompact  = "PreCompact"
-	claudeEventNotification = "Notification"
-)
+// claudeEventNames maps hooks.yaml event names to Claude's PascalCase settings.json keys.
+var claudeEventNames = map[string]string{
+	"pre_tool_use":  "PreToolUse",
+	"post_tool_use": "PostToolUse",
+	"stop":          "Stop",
+	"session_start": "SessionStart",
+	"pre_compact":   "PreCompact",
+	"notification":  "Notification",
+}
 
 // generateHooksSettings emits a .claude/settings.json with Claude-native hooks.
 // The output uses Merge=true so non-hook keys in the existing file survive.
 func (g *ClaudePresetGenerator) generateHooksSettings(cfg *config.ConfigV3, baseDir string) ([]config.OutputFileV3, error) {
-	hooks := cfg.Hooks
-	if hooks.IsEmpty() {
+	if cfg.Hooks.IsEmpty() {
 		return nil, nil
 	}
 
 	claudeHooks := make(map[string]interface{})
-	if len(hooks.PreToolUse) > 0 {
-		claudeHooks[claudeEventPreToolUse] = toClaudeHookEntries(hooks.PreToolUse)
-	}
-	if len(hooks.PostToolUse) > 0 {
-		claudeHooks[claudeEventPostToolUse] = toClaudeHookEntries(hooks.PostToolUse)
-	}
-	if len(hooks.Stop) > 0 {
-		claudeHooks[claudeEventStop] = toClaudeHookEntries(hooks.Stop)
-	}
-	if len(hooks.SessionStart) > 0 {
-		claudeHooks[claudeEventSessionStart] = toClaudeHookEntries(hooks.SessionStart)
-	}
-	if len(hooks.PreCompact) > 0 {
-		claudeHooks[claudeEventPreCompact] = toClaudeHookEntries(hooks.PreCompact)
-	}
-	if len(hooks.Notification) > 0 {
-		claudeHooks[claudeEventNotification] = toClaudeHookEntries(hooks.Notification)
+	for _, group := range cfg.Hooks.EventGroups() {
+		if len(group.Entries) == 0 {
+			continue
+		}
+		claudeName, ok := claudeEventNames[group.Event]
+		if !ok {
+			continue
+		}
+		claudeHooks[claudeName] = toClaudeHookEntries(group.Entries)
 	}
 
 	wrapper := map[string]interface{}{

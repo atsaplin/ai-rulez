@@ -2,9 +2,9 @@ package generator
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/Goldziher/ai-rulez/internal/logger"
+	"github.com/samber/oops"
 )
 
 // shallowMergeJSON merges two JSON objects at the top level.
@@ -26,7 +26,7 @@ func shallowMergeJSON(existing, generated []byte) ([]byte, error) {
 
 	var generatedMap map[string]json.RawMessage
 	if err := json.Unmarshal(generated, &generatedMap); err != nil {
-		return nil, fmt.Errorf("unmarshal generated JSON: %w", err)
+		return nil, oops.Wrapf(err, "unmarshal generated JSON")
 	}
 
 	for key, value := range generatedMap {
@@ -36,7 +36,7 @@ func shallowMergeJSON(existing, generated []byte) ([]byte, error) {
 	// encoding/json sorts map keys alphabetically, so output is deterministic
 	result, err := json.MarshalIndent(existingMap, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("marshal merged JSON: %w", err)
+		return nil, oops.Wrapf(err, "marshal merged JSON")
 	}
 
 	result = append(result, '\n')

@@ -29,28 +29,19 @@ type HookEntry struct {
 	Timeout int    `yaml:"timeout,omitempty" json:"timeout,omitempty"` // Timeout in seconds (0 = default)
 }
 
-// IsEmpty returns true if no hooks are configured.
-func (h *HooksConfigV3) IsEmpty() bool {
-	if h == nil {
-		return true
-	}
-	return len(h.PreToolUse) == 0 &&
-		len(h.PostToolUse) == 0 &&
-		len(h.Stop) == 0 &&
-		len(h.SessionStart) == 0 &&
-		len(h.PreCompact) == 0 &&
-		len(h.Notification) == 0
+// HookEventGroup pairs an event name with its hook entries.
+type HookEventGroup struct {
+	Event   string
+	Entries []HookEntry
 }
 
-// Validate checks that all hook entries have non-empty commands.
-func (h *HooksConfigV3) Validate() error {
+// EventGroups returns all configured event groups in a stable order.
+// This is the single source of truth for iterating over hook events.
+func (h *HooksConfigV3) EventGroups() []HookEventGroup {
 	if h == nil {
 		return nil
 	}
-	allEntries := []struct {
-		event   string
-		entries []HookEntry
-	}{
+	return []HookEventGroup{
 		{"pre_tool_use", h.PreToolUse},
 		{"post_tool_use", h.PostToolUse},
 		{"stop", h.Stop},
@@ -58,17 +49,31 @@ func (h *HooksConfigV3) Validate() error {
 		{"pre_compact", h.PreCompact},
 		{"notification", h.Notification},
 	}
-	for _, group := range allEntries {
-		for i, entry := range group.entries {
+}
+
+// IsEmpty returns true if no hooks are configured.
+func (h *HooksConfigV3) IsEmpty() bool {
+	for _, g := range h.EventGroups() {
+		if len(g.Entries) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Validate checks that all hook entries have non-empty commands.
+func (h *HooksConfigV3) Validate() error {
+	for _, group := range h.EventGroups() {
+		for i, entry := range group.Entries {
 			if entry.Command == "" {
 				return oops.
-					With("event", group.event).
+					With("event", group.Event).
 					With("index", i).
 					Errorf("hook entry has empty command")
 			}
 			if entry.Timeout < 0 {
 				return oops.
-					With("event", group.event).
+					With("event", group.Event).
 					With("index", i).
 					Errorf("hook entry has negative timeout: %d", entry.Timeout)
 			}

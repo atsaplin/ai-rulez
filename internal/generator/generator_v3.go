@@ -266,11 +266,7 @@ func (g *GeneratorV3) writeOutputs(outputs []config.OutputFileV3) error {
 // writeOutput writes a single output file or creates a directory.
 // If output.Merge is true, the generated JSON is shallow-merged with any existing file content.
 func (g *GeneratorV3) writeOutput(output config.OutputFileV3) error {
-	// Resolve absolute path
-	absPath := output.Path
-	if !filepath.IsAbs(absPath) {
-		absPath = filepath.Join(g.config.BaseDir, output.Path)
-	}
+	absPath := g.resolveAbsPath(output.Path)
 
 	// If this is a directory, just create it
 	if output.IsDir {
@@ -323,13 +319,9 @@ func (g *GeneratorV3) writeOutput(output config.OutputFileV3) error {
 }
 
 // cleanManagedDirs removes stale files from directories that are fully managed by the generator.
-// It collects all directory outputs from the new generation, then removes any existing files
-// in those directories that are not part of the new output set.
-// Merge-target files are excluded from cleanup because they contain user-managed content.
+// Merge-target files are excluded because they contain user-managed content.
 func (g *GeneratorV3) cleanManagedDirs(outputs []config.OutputFileV3) {
-	newFiles := g.collectOutputPaths(outputs, false)
-	managedDirs := g.collectOutputPaths(outputs, true)
-	mergePaths := g.collectMergePaths(outputs)
+	newFiles, managedDirs, mergePaths := g.classifyOutputPaths(outputs)
 
 	for dir := range managedDirs {
 		entries, err := os.ReadDir(dir)
@@ -339,7 +331,7 @@ func (g *GeneratorV3) cleanManagedDirs(outputs []config.OutputFileV3) {
 		for _, entry := range entries {
 			entryPath := filepath.Join(dir, entry.Name())
 			if mergePaths[entryPath] {
-				continue // Skip merge targets; they contain user-managed content
+				continue
 			}
 			if entry.IsDir() {
 				g.removeStaleDir(entryPath, newFiles)
@@ -350,36 +342,31 @@ func (g *GeneratorV3) cleanManagedDirs(outputs []config.OutputFileV3) {
 	}
 }
 
-// collectMergePaths collects absolute paths of outputs with Merge=true.
-func (g *GeneratorV3) collectMergePaths(outputs []config.OutputFileV3) map[string]bool {
-	result := make(map[string]bool)
+// classifyOutputPaths sorts outputs into files, directories, and merge targets in a single pass.
+func (g *GeneratorV3) classifyOutputPaths(outputs []config.OutputFileV3) (files, dirs, merge map[string]bool) {
+	files = make(map[string]bool)
+	dirs = make(map[string]bool)
+	merge = make(map[string]bool)
 	for _, o := range outputs {
-		if !o.Merge {
-			continue
+		absPath := g.resolveAbsPath(o.Path)
+		switch {
+		case o.Merge:
+			merge[absPath] = true
+		case o.IsDir:
+			dirs[absPath] = true
+		default:
+			files[absPath] = true
 		}
-		absPath := o.Path
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(g.config.BaseDir, o.Path)
-		}
-		result[absPath] = true
 	}
-	return result
+	return
 }
 
-// collectOutputPaths collects absolute paths from outputs, filtered by IsDir.
-func (g *GeneratorV3) collectOutputPaths(outputs []config.OutputFileV3, dirsOnly bool) map[string]bool {
-	result := make(map[string]bool)
-	for _, o := range outputs {
-		if o.IsDir != dirsOnly {
-			continue
-		}
-		absPath := o.Path
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(g.config.BaseDir, o.Path)
-		}
-		result[absPath] = true
+// resolveAbsPath resolves a relative path against the config base directory.
+func (g *GeneratorV3) resolveAbsPath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
 	}
-	return result
+	return filepath.Join(g.config.BaseDir, path)
 }
 
 // removeStaleDir removes a directory if no new output file targets it.

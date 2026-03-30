@@ -107,7 +107,7 @@ func runGenerate(cmd *cobra.Command, args []string) {
 func runGlobalGenerate() {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: cannot determine home directory: %v\n", err)
+		fmtError(oops.Wrapf(err, "determine home directory"))
 		os.Exit(1)
 	}
 

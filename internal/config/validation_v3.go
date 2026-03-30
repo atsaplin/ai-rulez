@@ -29,10 +29,21 @@ func (c *ConfigV3) ValidateV3() error {
 		return err
 	}
 
+	if err := c.validateHooks(); err != nil {
+		return err
+	}
+
 	// Warn about missing domain references (non-fatal)
 	c.warnMissingDomainReferences()
 
 	return nil
+}
+
+func (c *ConfigV3) validateHooks() error {
+	if c.Hooks == nil {
+		return nil
+	}
+	return c.Hooks.Validate()
 }
 
 func (c *ConfigV3) validateSkillDescriptions() error {

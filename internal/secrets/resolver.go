@@ -12,12 +12,11 @@ import (
 
 const opTimeout = 10 * time.Second
 
-// CommandRunner executes a command and returns its stdout.
-// Abstracted for testing.
-type CommandRunner func(ctx context.Context, name string, args ...string) (string, error)
+// commandRunner executes a command and returns its stdout.
+type commandRunner func(ctx context.Context, name string, args ...string) (string, error)
 
-// DefaultCommandRunner shells out to the real binary with a context deadline.
-func DefaultCommandRunner(ctx context.Context, name string, args ...string) (string, error) {
+// defaultCommandRunner shells out to the real binary with a context deadline.
+func defaultCommandRunner(ctx context.Context, name string, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -34,7 +33,7 @@ func DefaultCommandRunner(ctx context.Context, name string, args ...string) (str
 
 // Resolver resolves op:// references in MCP server env vars using the 1Password CLI.
 type Resolver struct {
-	runner CommandRunner
+	runner commandRunner
 	cache  map[string]string
 	mu     sync.Mutex
 }
@@ -42,13 +41,13 @@ type Resolver struct {
 // NewResolver creates a Resolver with the default command runner.
 func NewResolver() *Resolver {
 	return &Resolver{
-		runner: DefaultCommandRunner,
+		runner: defaultCommandRunner,
 		cache:  make(map[string]string),
 	}
 }
 
-// NewResolverWithRunner creates a Resolver with a custom command runner (for testing).
-func NewResolverWithRunner(runner CommandRunner) *Resolver {
+// newResolverWithRunner creates a Resolver with a custom command runner (for testing).
+func newResolverWithRunner(runner commandRunner) *Resolver {
 	return &Resolver{
 		runner: runner,
 		cache:  make(map[string]string),
