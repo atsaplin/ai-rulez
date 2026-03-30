@@ -104,11 +104,5 @@ func LoadHooksConfig(configDir string) (*HooksConfigV3, error) {
 			Wrapf(err, "parse hooks YAML")
 	}
 
-	if err := hooks.Validate(); err != nil {
-		return nil, oops.
-			With("path", hooksPath).
-			Wrapf(err, "validate hooks config")
-	}
-
 	return &hooks, nil
 }

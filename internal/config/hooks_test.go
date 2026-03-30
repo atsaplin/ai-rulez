@@ -101,14 +101,18 @@ func TestHooksConfigV3_Validate_nil(t *testing.T) {
 	require.NoError(t, (*HooksConfigV3)(nil).Validate())
 }
 
-func TestLoadHooksConfig_rejects_empty_command(t *testing.T) {
+func TestLoadHooksConfig_loads_empty_command_without_error(t *testing.T) {
+	// Validation is deferred to ValidateV3, not LoadHooksConfig
 	dir := t.TempDir()
 	hooksContent := `stop:
   - command: ""
 `
 	require.NoError(t, os.WriteFile(filepath.Join(dir, hooksYAMLFilename), []byte(hooksContent), 0o644))
 
-	_, err := LoadHooksConfig(dir)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty command")
+	hooks, err := LoadHooksConfig(dir)
+	require.NoError(t, err)
+	require.NotNil(t, hooks)
+
+	// But Validate catches it
+	require.Error(t, hooks.Validate())
 }

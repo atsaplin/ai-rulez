@@ -13,6 +13,7 @@ import (
 	"github.com/Goldziher/ai-rulez/internal/logger"
 	"github.com/Goldziher/ai-rulez/internal/markdown"
 	"github.com/Goldziher/ai-rulez/internal/templates"
+	"github.com/samber/oops"
 	"gopkg.in/yaml.v3"
 )
 
@@ -50,7 +51,6 @@ func (g *ClaudePresetGenerator) GetOutputPaths(baseDir string) []string {
 		filepath.Join(baseDir, ".claude"),
 		filepath.Join(baseDir, ".claude", "skills"),
 		filepath.Join(baseDir, ".claude", "agents"),
-		filepath.Join(baseDir, ".claude", "settings.json"),
 	}
 }
 
@@ -148,10 +148,6 @@ var claudeEventNames = map[string]string{
 // generateHooksSettings emits a .claude/settings.json with Claude-native hooks.
 // The output uses Merge=true so non-hook keys in the existing file survive.
 func (g *ClaudePresetGenerator) generateHooksSettings(cfg *config.ConfigV3, baseDir string) ([]config.OutputFileV3, error) {
-	if cfg.Hooks.IsEmpty() {
-		return nil, nil
-	}
-
 	claudeHooks := make(map[string]interface{})
 	for _, group := range cfg.Hooks.EventGroups() {
 		if len(group.Entries) == 0 {
@@ -170,7 +166,7 @@ func (g *ClaudePresetGenerator) generateHooksSettings(cfg *config.ConfigV3, base
 
 	data, err := json.MarshalIndent(wrapper, "", "  ")
 	if err != nil {
-		return nil, fmt.Errorf("marshal hooks settings: %w", err)
+		return nil, oops.Wrapf(err, "marshal hooks settings")
 	}
 	data = append(data, '\n')
 

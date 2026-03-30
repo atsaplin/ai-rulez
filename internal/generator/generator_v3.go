@@ -244,7 +244,10 @@ func (g *GeneratorV3) collectMCPServersForContent(content *config.ContentTreeV3)
 				logger.Warn("Failed to resolve secrets for MCP server", "server", name, "error", err)
 				continue
 			}
-			server.Env = resolved
+			// Shallow-copy the server to avoid mutating the original config
+			copy := *server
+			copy.Env = resolved
+			collected[name] = &copy
 		}
 	}
 

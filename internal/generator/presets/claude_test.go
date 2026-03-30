@@ -633,7 +633,6 @@ func TestClaudePresetGenerator_GetOutputPaths(t *testing.T) {
 		filepath.Join(baseDir, ".claude"),
 		filepath.Join(baseDir, ".claude", "skills"),
 		filepath.Join(baseDir, ".claude", "agents"),
-		filepath.Join(baseDir, ".claude", "settings.json"),
 	}
 
 	if len(paths) != len(expectedPaths) {
