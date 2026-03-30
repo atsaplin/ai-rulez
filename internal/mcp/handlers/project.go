@@ -42,7 +42,7 @@ func GenerateOutputsHandler(ctx context.Context, request *ToolRequest) (*mcp.Cal
 		if err := v3cfg.ValidateV3(); err != nil {
 			return ToolError(err)
 		}
-		gen := generator.NewGeneratorV3(v3cfg)
+		gen := generator.NewGeneratorV3(v3cfg, false)
 		if err := gen.Generate(""); err != nil {
 			return ToolError(err)
 		}

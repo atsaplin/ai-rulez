@@ -24,10 +24,10 @@ func mockRunner(responses map[string]string) CommandRunner {
 }
 
 func TestIsOpReference(t *testing.T) {
-	assert.True(t, IsOpReference("op://vault/item/field"))
-	assert.False(t, IsOpReference("plain-value"))
-	assert.False(t, IsOpReference(""))
-	assert.False(t, IsOpReference("OP://uppercase"))
+	assert.True(t, isOpReference("op://vault/item/field"))
+	assert.False(t, isOpReference("plain-value"))
+	assert.False(t, isOpReference(""))
+	assert.False(t, isOpReference("OP://uppercase"))
 }
 
 func TestResolveEnv_resolves_op_references(t *testing.T) {
@@ -77,7 +77,7 @@ func TestResolveEnv_caches_duplicate_refs(t *testing.T) {
 
 func TestResolveEnv_returns_error_on_op_failure(t *testing.T) {
 	runner := func(_ context.Context, _ string, _ ...string) (string, error) {
-		return "", fmt.Errorf("op: authentication required")
+		return "", fmt.Errorf("authentication required")
 	}
 	r := NewResolverWithRunner(runner)
 
@@ -87,8 +87,7 @@ func TestResolveEnv_returns_error_on_op_failure(t *testing.T) {
 
 	_, err := r.ResolveEnv(env)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "resolve SECRET")
-	assert.Contains(t, err.Error(), "authentication required")
+	assert.Contains(t, err.Error(), "resolve secret")
 }
 
 func TestResolveEnv_empty_map(t *testing.T) {

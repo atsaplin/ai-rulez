@@ -555,7 +555,7 @@ func (m *V2ToV3Migrator) validateMigration(ctx context.Context, aiRulezDir strin
 	}
 
 	// Try to create a generator to ensure structure is valid
-	gen := generator.NewGeneratorV3(v3Config)
+	gen := generator.NewGeneratorV3(v3Config, false)
 	if gen == nil {
 		return oops.
 			Errorf("failed to create generator for validation")

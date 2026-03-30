@@ -2,11 +2,12 @@ package secrets
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/samber/oops"
 )
 
 const opTimeout = 10 * time.Second
@@ -20,9 +21,13 @@ func DefaultCommandRunner(ctx context.Context, name string, args ...string) (str
 	out, err := exec.CommandContext(ctx, name, args...).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("%s failed: %s", name, strings.TrimSpace(string(exitErr.Stderr)))
+			return "", oops.
+				With("command", name).
+				Wrapf(err, "%s", strings.TrimSpace(string(exitErr.Stderr)))
 		}
-		return "", err
+		return "", oops.
+			With("command", name).
+			Wrapf(err, "execute command")
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -50,8 +55,8 @@ func NewResolverWithRunner(runner CommandRunner) *Resolver {
 	}
 }
 
-// IsOpReference returns true if the value starts with "op://".
-func IsOpReference(value string) bool {
+// isOpReference returns true if the value starts with "op://".
+func isOpReference(value string) bool {
 	return strings.HasPrefix(value, "op://")
 }
 
@@ -63,12 +68,14 @@ func (r *Resolver) ResolveEnv(env map[string]string) (map[string]string, error) 
 		result[k] = v
 	}
 	for key, value := range result {
-		if !IsOpReference(value) {
+		if !isOpReference(value) {
 			continue
 		}
 		resolved, err := r.resolve(value)
 		if err != nil {
-			return nil, fmt.Errorf("resolve %s: %w", key, err)
+			return nil, oops.
+				With("env_key", key).
+				Wrapf(err, "resolve secret")
 		}
 		result[key] = resolved
 	}
@@ -76,7 +83,6 @@ func (r *Resolver) ResolveEnv(env map[string]string) (map[string]string, error) 
 }
 
 // resolve resolves a single op:// reference, deduplicating via cache.
-// The lock is held across the full check-and-fetch to prevent duplicate subprocess calls.
 func (r *Resolver) resolve(ref string) (string, error) {
 	r.mu.Lock()
 	if cached, ok := r.cache[ref]; ok {
@@ -90,7 +96,7 @@ func (r *Resolver) resolve(ref string) (string, error) {
 
 	value, err := r.runner(ctx, "op", "read", ref)
 	if err != nil {
-		return "", fmt.Errorf("op read: %w", err)
+		return "", oops.Wrapf(err, "op read")
 	}
 
 	r.mu.Lock()

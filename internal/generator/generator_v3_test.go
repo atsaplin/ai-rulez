@@ -28,7 +28,7 @@ func TestGeneratorV3_Basic(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -61,7 +61,7 @@ func TestGeneratorV3_MultiPreset(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -92,7 +92,7 @@ func TestGeneratorV3_WithDomains_DefaultProfile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate with default profile (should be "backend" according to config)
 	err = gen.Generate("")
@@ -116,7 +116,7 @@ func TestGeneratorV3_WithDomains_FrontendProfile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate with frontend profile
 	err = gen.Generate("frontend")
@@ -140,7 +140,7 @@ func TestGeneratorV3_WithDomains_FullProfile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate with full profile
 	err = gen.Generate("full")
@@ -164,7 +164,7 @@ func TestGeneratorV3_InvalidProfile(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate with invalid profile
 	err = gen.Generate("nonexistent")
@@ -186,7 +186,7 @@ func TestGeneratorV3_Gitignore_Disabled(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -215,7 +215,7 @@ func TestGeneratorV3_Gitignore_Enabled(t *testing.T) {
 	cfg.Gitignore = &enabled
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -262,7 +262,7 @@ gitignore: false
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -306,7 +306,7 @@ gitignore: false
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -331,7 +331,7 @@ func TestGeneratorV3_MCPAutoGeneration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -365,7 +365,7 @@ func TestGeneratorV3_MCPAutoGeneration_NoServers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -394,7 +394,7 @@ func TestGeneratorV3_Gitignore_NoAbsolutePaths(t *testing.T) {
 	cfg.Gitignore = &enabled
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -439,7 +439,7 @@ func TestGeneratorV3_Gitignore_SkipsAiRulezFolder(t *testing.T) {
 	cfg.Gitignore = &enabled
 
 	// Create generator
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	// Generate
 	err = gen.Generate("default")
@@ -506,7 +506,7 @@ func BenchmarkGeneratorV3_Basic(b *testing.B) {
 	cfg, err := config.LoadConfigV3(ctx, tempDir)
 	require.NoError(b, err)
 
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -935,7 +935,7 @@ func TestGeneratorV3_InvalidProfile_SortedHint(t *testing.T) {
 		},
 	}
 
-	gen := NewGeneratorV3(cfg)
+	gen := NewGeneratorV3(cfg, false)
 	err := gen.Generate("nonexistent")
 	require.Error(t, err)
 

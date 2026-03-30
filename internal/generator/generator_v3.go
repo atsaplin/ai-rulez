@@ -19,13 +19,15 @@ const defaultProfileName = "default"
 // GeneratorV3 handles V3 configuration generation
 type GeneratorV3 struct {
 	config         *config.ConfigV3
-	ResolveSecrets bool // When true, resolve op:// references in MCP server env vars
+	resolveSecrets bool
 }
 
-// NewGeneratorV3 creates a new V3 generator
-func NewGeneratorV3(cfg *config.ConfigV3) *GeneratorV3 {
+// NewGeneratorV3 creates a new V3 generator.
+// When resolveSecrets is true, op:// references in MCP server env vars are resolved via the 1Password CLI.
+func NewGeneratorV3(cfg *config.ConfigV3, resolveSecrets bool) *GeneratorV3 {
 	return &GeneratorV3{
-		config: cfg,
+		config:         cfg,
+		resolveSecrets: resolveSecrets,
 	}
 }
 
@@ -231,7 +233,7 @@ func (g *GeneratorV3) collectMCPServersForContent(content *config.ContentTreeV3)
 
 	// Resolve op:// references if enabled.
 	// If op is not on PATH, the first resolve call fails with a clear error.
-	if g.ResolveSecrets {
+	if g.resolveSecrets {
 		resolver := secrets.NewResolver()
 		for name, server := range collected {
 			if server.Env == nil {

@@ -3,6 +3,8 @@ package generator
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/Goldziher/ai-rulez/internal/logger"
 )
 
 // shallowMergeJSON merges two JSON objects at the top level.
@@ -16,7 +18,9 @@ func shallowMergeJSON(existing, generated []byte) ([]byte, error) {
 
 	var existingMap map[string]json.RawMessage
 	if err := json.Unmarshal(existing, &existingMap); err != nil {
-		// Existing file is not a valid JSON object; treat as overwrite
+		// Existing file is not a valid JSON object (could be malformed, an array, or a primitive).
+		// Fall back to overwrite, but warn so the user knows their content was replaced.
+		logger.Warn("Existing file is not a JSON object; overwriting instead of merging", "error", err)
 		return generated, nil
 	}
 

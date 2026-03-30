@@ -24,6 +24,8 @@ session_start:
   - command: "ccf session-start"
 pre_compact:
   - command: "ccf pre-compact"
+notification:
+  - command: "ccf notify"
 `
 	require.NoError(t, os.WriteFile(filepath.Join(dir, hooksYAMLFilename), []byte(hooksContent), 0o644))
 
@@ -43,6 +45,7 @@ pre_compact:
 
 	assert.Len(t, hooks.SessionStart, 1)
 	assert.Len(t, hooks.PreCompact, 1)
+	assert.Len(t, hooks.Notification, 1)
 }
 
 func TestLoadHooksConfig_returns_nil_when_missing(t *testing.T) {
@@ -68,43 +71,44 @@ func TestHooksConfigV3_IsEmpty(t *testing.T) {
 	}).IsEmpty())
 }
 
-func TestToClaudeSettingsHooks_format(t *testing.T) {
+func TestHooksConfigV3_Validate_empty_command(t *testing.T) {
 	hooks := &HooksConfigV3{
-		PreToolUse: []HookEntry{
-			{Matcher: "Write|Edit", Command: "ccf require-contract"},
-		},
-		Stop: []HookEntry{
-			{Command: "ccf verify-stop", Timeout: 300},
-		},
+		Stop: []HookEntry{{Command: ""}},
 	}
-
-	result := hooks.ToClaudeSettingsHooks()
-	require.NotNil(t, result)
-
-	// Verify PreToolUse
-	preToolUse, ok := result["PreToolUse"].([]interface{})
-	require.True(t, ok)
-	require.Len(t, preToolUse, 1)
-
-	group := preToolUse[0].(map[string]interface{})
-	assert.Equal(t, "Write|Edit", group["matcher"])
-	hooksList := group["hooks"].([]interface{})
-	hook := hooksList[0].(map[string]interface{})
-	assert.Equal(t, "command", hook["type"])
-	assert.Equal(t, "ccf require-contract", hook["command"])
-
-	// Verify Stop
-	stop, ok := result["Stop"].([]interface{})
-	require.True(t, ok)
-	require.Len(t, stop, 1)
-
-	stopGroup := stop[0].(map[string]interface{})
-	assert.Nil(t, stopGroup["matcher"]) // No matcher for stop hooks
-	stopHooks := stopGroup["hooks"].([]interface{})
-	stopHook := stopHooks[0].(map[string]interface{})
-	assert.Equal(t, 300, stopHook["timeout"])
+	err := hooks.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty command")
 }
 
-func TestToClaudeSettingsHooks_empty(t *testing.T) {
-	assert.Nil(t, (&HooksConfigV3{}).ToClaudeSettingsHooks())
+func TestHooksConfigV3_Validate_negative_timeout(t *testing.T) {
+	hooks := &HooksConfigV3{
+		Stop: []HookEntry{{Command: "echo", Timeout: -1}},
+	}
+	err := hooks.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "negative timeout")
+}
+
+func TestHooksConfigV3_Validate_valid(t *testing.T) {
+	hooks := &HooksConfigV3{
+		PreToolUse: []HookEntry{{Matcher: "Write", Command: "ccf check", Timeout: 30}},
+		Stop:       []HookEntry{{Command: "ccf verify"}},
+	}
+	require.NoError(t, hooks.Validate())
+}
+
+func TestHooksConfigV3_Validate_nil(t *testing.T) {
+	require.NoError(t, (*HooksConfigV3)(nil).Validate())
+}
+
+func TestLoadHooksConfig_rejects_empty_command(t *testing.T) {
+	dir := t.TempDir()
+	hooksContent := `stop:
+  - command: ""
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, hooksYAMLFilename), []byte(hooksContent), 0o644))
+
+	_, err := LoadHooksConfig(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty command")
 }

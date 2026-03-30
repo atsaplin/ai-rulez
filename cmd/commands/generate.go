@@ -143,8 +143,7 @@ func generateFromConfig(cfg *config.ConfigV3) {
 		os.Exit(1)
 	}
 
-	gen := generator.NewGeneratorV3(cfg)
-	gen.ResolveSecrets = !noSecrets
+	gen := generator.NewGeneratorV3(cfg, !noSecrets)
 
 	if dryRun {
 		progress.PrintlnIfNotQuiet("Note: --dry-run not yet supported for V3 configs")
@@ -237,7 +236,7 @@ func processConfigFile(configPath string, fileCounter *progress.FileCounter) int
 	}
 
 	// Create V3 generator
-	gen := generator.NewGeneratorV3(cfg)
+	gen := generator.NewGeneratorV3(cfg, !noSecrets)
 
 	if dryRun {
 		progress.PrintlnIfNotQuiet("  Note: dry-run not yet supported for V3 configs")
