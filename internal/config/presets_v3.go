@@ -18,6 +18,7 @@ type OutputFileV3 struct {
 	Path    string
 	Content string
 	IsDir   bool
+	Merge   bool // When true, shallow-merge JSON with existing file instead of overwriting
 }
 
 // PresetRegistryV3 maps preset names to their generators

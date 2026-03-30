@@ -261,7 +261,8 @@ func (g *GeneratorV3) writeOutputs(outputs []config.OutputFileV3) error {
 	return nil
 }
 
-// writeOutput writes a single output file or creates a directory
+// writeOutput writes a single output file or creates a directory.
+// If output.Merge is true, the generated JSON is shallow-merged with any existing file content.
 func (g *GeneratorV3) writeOutput(output config.OutputFileV3) error {
 	// Resolve absolute path
 	absPath := output.Path
@@ -291,24 +292,42 @@ func (g *GeneratorV3) writeOutput(output config.OutputFileV3) error {
 			Wrapf(err, "create parent directory")
 	}
 
+	content := []byte(output.Content)
+
+	// If merge mode, shallow-merge with existing file content
+	if output.Merge {
+		existing, err := os.ReadFile(absPath)
+		if err == nil {
+			merged, mergeErr := shallowMergeJSON(existing, content)
+			if mergeErr != nil {
+				logger.Warn("Failed to merge JSON, overwriting", "path", absPath, "error", mergeErr)
+			} else {
+				content = merged
+			}
+		}
+		// If file doesn't exist, just write normally
+	}
+
 	// Write file
-	if err := os.WriteFile(absPath, []byte(output.Content), 0o644); err != nil {
+	if err := os.WriteFile(absPath, content, 0o644); err != nil {
 		return oops.
 			With("path", absPath).
 			Hint(fmt.Sprintf("Check write permissions for: %s", absPath)).
 			Wrapf(err, "write file")
 	}
 
-	logger.Debug("Wrote file", "path", output.Path, "size", len(output.Content))
+	logger.Debug("Wrote file", "path", output.Path, "size", len(content), "merge", output.Merge)
 	return nil
 }
 
 // cleanManagedDirs removes stale files from directories that are fully managed by the generator.
 // It collects all directory outputs from the new generation, then removes any existing files
 // in those directories that are not part of the new output set.
+// Merge-target files are excluded from cleanup because they contain user-managed content.
 func (g *GeneratorV3) cleanManagedDirs(outputs []config.OutputFileV3) {
 	newFiles := g.collectOutputPaths(outputs, false)
 	managedDirs := g.collectOutputPaths(outputs, true)
+	mergePaths := g.collectMergePaths(outputs)
 
 	for dir := range managedDirs {
 		entries, err := os.ReadDir(dir)
@@ -317,6 +336,9 @@ func (g *GeneratorV3) cleanManagedDirs(outputs []config.OutputFileV3) {
 		}
 		for _, entry := range entries {
 			entryPath := filepath.Join(dir, entry.Name())
+			if mergePaths[entryPath] {
+				continue // Skip merge targets; they contain user-managed content
+			}
 			if entry.IsDir() {
 				g.removeStaleDir(entryPath, newFiles)
 			} else if !newFiles[entryPath] {
@@ -324,6 +346,22 @@ func (g *GeneratorV3) cleanManagedDirs(outputs []config.OutputFileV3) {
 			}
 		}
 	}
+}
+
+// collectMergePaths collects absolute paths of outputs with Merge=true.
+func (g *GeneratorV3) collectMergePaths(outputs []config.OutputFileV3) map[string]bool {
+	result := make(map[string]bool)
+	for _, o := range outputs {
+		if !o.Merge {
+			continue
+		}
+		absPath := o.Path
+		if !filepath.IsAbs(absPath) {
+			absPath = filepath.Join(g.config.BaseDir, o.Path)
+		}
+		result[absPath] = true
+	}
+	return result
 }
 
 // collectOutputPaths collects absolute paths from outputs, filtered by IsDir.
