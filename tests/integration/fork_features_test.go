@@ -452,6 +452,248 @@ session_start:
 	assert.Contains(t, string(agentsMD), "Write good code.")
 	assert.Contains(t, string(agentsMD), "Test everything.")
 
-	// Codex should NOT have settings.json
+	// Codex should have hooks.json (not settings.json)
 	assert.NoFileExists(t, filepath.Join(baseDir, ".codex", "settings.json"))
+	codexHooksPath := filepath.Join(baseDir, ".codex", "hooks.json")
+	assert.FileExists(t, codexHooksPath)
+
+	codexHooksData, err := os.ReadFile(codexHooksPath)
+	require.NoError(t, err)
+	var codexHooksJSON map[string]interface{}
+	require.NoError(t, json.Unmarshal(codexHooksData, &codexHooksJSON))
+	codexHooks := codexHooksJSON["hooks"].(map[string]interface{})
+	assert.Contains(t, codexHooks, "PreToolUse", "Codex should have PreToolUse")
+	assert.Contains(t, codexHooks, "Stop", "Codex should have Stop")
+	assert.Contains(t, codexHooks, "SessionStart", "Codex should have SessionStart")
+	assert.NotContains(t, codexHooks, "PreCompact", "Codex does not support PreCompact")
+}
+
+// --- Codex hooks integration tests ---
+
+func TestCodex_hooks_json_generated(t *testing.T) {
+	configDir := t.TempDir()
+	baseDir := t.TempDir()
+
+	setupMinimalConfig(t, configDir, "  - codex\n")
+
+	hooksYAML := `pre_tool_use:
+  - matcher: "shell"
+    command: "ccf check-shell"
+post_tool_use:
+  - matcher: "shell"
+    command: "ccf post-shell"
+stop:
+  - command: "ccf verify-stop"
+    timeout: 120
+session_start:
+  - command: "ccf session-start"
+pre_compact:
+  - command: "ccf pre-compact"
+notification:
+  - command: "ccf notify"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "hooks.yaml"), []byte(hooksYAML), 0o644))
+
+	cfg, err := config.LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.ValidateV3())
+
+	gen := generator.NewGeneratorV3(cfg, false)
+	require.NoError(t, gen.Generate(""))
+
+	// hooks.json should be in .codex/
+	hooksPath := filepath.Join(baseDir, ".codex", "hooks.json")
+	assert.FileExists(t, hooksPath)
+
+	data, err := os.ReadFile(hooksPath)
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &parsed))
+
+	hooks := parsed["hooks"].(map[string]interface{})
+
+	// Codex supports these 4 events
+	assert.Contains(t, hooks, "PreToolUse")
+	assert.Contains(t, hooks, "PostToolUse")
+	assert.Contains(t, hooks, "Stop")
+	assert.Contains(t, hooks, "SessionStart")
+
+	// Codex does NOT support these
+	assert.NotContains(t, hooks, "PreCompact")
+	assert.NotContains(t, hooks, "Notification")
+
+	// Verify structure matches Codex's expected format
+	preToolUse := hooks["PreToolUse"].([]interface{})
+	require.Len(t, preToolUse, 1)
+	group := preToolUse[0].(map[string]interface{})
+	assert.Equal(t, "shell", group["matcher"])
+	hooksList := group["hooks"].([]interface{})
+	hook := hooksList[0].(map[string]interface{})
+	assert.Equal(t, "command", hook["type"])
+	assert.Equal(t, "ccf check-shell", hook["command"])
+
+	// Verify timeout on Stop
+	stopEntries := hooks["Stop"].([]interface{})
+	stopHook := stopEntries[0].(map[string]interface{})["hooks"].([]interface{})[0].(map[string]interface{})
+	assert.Equal(t, float64(120), stopHook["timeout"])
+}
+
+func TestCodex_no_hooks_json_when_no_hooks(t *testing.T) {
+	configDir := t.TempDir()
+	baseDir := t.TempDir()
+
+	setupMinimalConfig(t, configDir, "  - codex\n")
+
+	cfg, err := config.LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.ValidateV3())
+
+	gen := generator.NewGeneratorV3(cfg, false)
+	require.NoError(t, gen.Generate(""))
+
+	assert.NoFileExists(t, filepath.Join(baseDir, ".codex", "hooks.json"))
+}
+
+// --- Gemini hooks integration tests ---
+
+func TestGemini_hooks_in_settings_json(t *testing.T) {
+	configDir := t.TempDir()
+	baseDir := t.TempDir()
+
+	setupMinimalConfig(t, configDir, "  - gemini\n")
+
+	hooksYAML := `pre_tool_use:
+  - matcher: "read_file|write_file"
+    command: "ccf check-file-access"
+post_tool_use:
+  - matcher: "run_shell_command"
+    command: "ccf post-shell"
+stop:
+  - command: "ccf verify-stop"
+session_start:
+  - command: "ccf session-start"
+pre_compact:
+  - command: "ccf pre-compact"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "hooks.yaml"), []byte(hooksYAML), 0o644))
+
+	cfg, err := config.LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.ValidateV3())
+
+	gen := generator.NewGeneratorV3(cfg, false)
+	require.NoError(t, gen.Generate(""))
+
+	settingsPath := filepath.Join(baseDir, ".gemini", "settings.json")
+	assert.FileExists(t, settingsPath)
+
+	data, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+
+	var settings map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &settings))
+
+	// MCP config should still be present
+	assert.Contains(t, settings, "mcpServers", "MCP servers must survive")
+
+	// Hooks should use Gemini event names
+	hooks := settings["hooks"].(map[string]interface{})
+	assert.Contains(t, hooks, "BeforeTool", "pre_tool_use maps to BeforeTool")
+	assert.Contains(t, hooks, "AfterTool", "post_tool_use maps to AfterTool")
+	assert.Contains(t, hooks, "AfterAgent", "stop maps to AfterAgent")
+	assert.Contains(t, hooks, "BeforeAgent", "session_start maps to BeforeAgent")
+
+	// Gemini does not support PreCompact
+	assert.NotContains(t, hooks, "PreCompact")
+
+	// Verify BeforeTool structure
+	beforeTool := hooks["BeforeTool"].([]interface{})
+	require.Len(t, beforeTool, 1)
+	group := beforeTool[0].(map[string]interface{})
+	assert.Equal(t, "read_file|write_file", group["matcher"])
+	hooksList := group["hooks"].([]interface{})
+	hook := hooksList[0].(map[string]interface{})
+	assert.Equal(t, "command", hook["type"])
+	assert.Equal(t, "ccf check-file-access", hook["command"])
+}
+
+func TestGemini_no_hooks_in_settings_when_no_hooks(t *testing.T) {
+	configDir := t.TempDir()
+	baseDir := t.TempDir()
+
+	setupMinimalConfig(t, configDir, "  - gemini\n")
+
+	cfg, err := config.LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.ValidateV3())
+
+	gen := generator.NewGeneratorV3(cfg, false)
+	require.NoError(t, gen.Generate(""))
+
+	// settings.json should still exist (for MCP) but have no hooks key
+	settingsPath := filepath.Join(baseDir, ".gemini", "settings.json")
+	assert.FileExists(t, settingsPath)
+
+	data, err := os.ReadFile(settingsPath)
+	require.NoError(t, err)
+
+	var settings map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &settings))
+
+	assert.Contains(t, settings, "mcpServers")
+	assert.NotContains(t, settings, "hooks")
+}
+
+// --- Cross-preset hooks isolation test ---
+
+func TestAllPresets_hooks_use_correct_event_names(t *testing.T) {
+	configDir := t.TempDir()
+	baseDir := t.TempDir()
+
+	setupMinimalConfig(t, configDir, "  - claude\n  - codex\n  - gemini\n")
+
+	hooksYAML := `pre_tool_use:
+  - matcher: "Write"
+    command: "ccf pre"
+stop:
+  - command: "ccf stop"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "hooks.yaml"), []byte(hooksYAML), 0o644))
+
+	cfg, err := config.LoadConfigV3FromDir(context.Background(), configDir, baseDir)
+	require.NoError(t, err)
+	require.NoError(t, cfg.ValidateV3())
+
+	gen := generator.NewGeneratorV3(cfg, false)
+	require.NoError(t, gen.Generate(""))
+
+	// Claude: .claude/settings.json with PreToolUse, Stop
+	claudeData, err := os.ReadFile(filepath.Join(baseDir, ".claude", "settings.json"))
+	require.NoError(t, err)
+	var claudeSettings map[string]interface{}
+	require.NoError(t, json.Unmarshal(claudeData, &claudeSettings))
+	claudeHooks := claudeSettings["hooks"].(map[string]interface{})
+	assert.Contains(t, claudeHooks, "PreToolUse")
+	assert.Contains(t, claudeHooks, "Stop")
+
+	// Codex: .codex/hooks.json with PreToolUse, Stop
+	codexData, err := os.ReadFile(filepath.Join(baseDir, ".codex", "hooks.json"))
+	require.NoError(t, err)
+	var codexFile map[string]interface{}
+	require.NoError(t, json.Unmarshal(codexData, &codexFile))
+	codexHooks := codexFile["hooks"].(map[string]interface{})
+	assert.Contains(t, codexHooks, "PreToolUse")
+	assert.Contains(t, codexHooks, "Stop")
+
+	// Gemini: .gemini/settings.json with BeforeTool, AfterAgent
+	geminiData, err := os.ReadFile(filepath.Join(baseDir, ".gemini", "settings.json"))
+	require.NoError(t, err)
+	var geminiSettings map[string]interface{}
+	require.NoError(t, json.Unmarshal(geminiData, &geminiSettings))
+	geminiHooks := geminiSettings["hooks"].(map[string]interface{})
+	assert.Contains(t, geminiHooks, "BeforeTool", "Gemini uses BeforeTool not PreToolUse")
+	assert.Contains(t, geminiHooks, "AfterAgent", "Gemini uses AfterAgent not Stop")
+	assert.NotContains(t, geminiHooks, "PreToolUse", "Gemini should NOT use Claude event names")
+	assert.NotContains(t, geminiHooks, "Stop", "Gemini should NOT use Claude event names")
 }

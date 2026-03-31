@@ -77,8 +77,17 @@ func (g *GeminiPresetGenerator) Generate(content *config.ContentTreeV3, baseDir 
 	return outputs, nil
 }
 
+// geminiEventNames maps hooks.yaml event names to Gemini's settings.json keys.
+// Gemini uses different names: BeforeTool/AfterTool instead of PreToolUse/PostToolUse.
+// Gemini maps "stop" to AfterAgent and "session_start" to BeforeAgent.
+var geminiEventNames = map[string]string{
+	"pre_tool_use":  "BeforeTool",
+	"post_tool_use": "AfterTool",
+	"stop":          "AfterAgent",
+	"session_start": "BeforeAgent",
+}
+
 func (g *GeminiPresetGenerator) renderSettingsJSON(cfg *config.ConfigV3) (string, error) {
-	// Generate MCP settings for Gemini
 	settings := map[string]interface{}{
 		"mcpServers": map[string]interface{}{
 			"ai-rulez": map[string]interface{}{
@@ -90,6 +99,24 @@ func (g *GeminiPresetGenerator) renderSettingsJSON(cfg *config.ConfigV3) (string
 				},
 			},
 		},
+	}
+
+	// Add hooks if configured
+	if cfg.Hooks != nil && !cfg.Hooks.IsEmpty() {
+		nativeHooks := make(map[string]interface{})
+		for _, group := range cfg.Hooks.EventGroups() {
+			if len(group.Entries) == 0 {
+				continue
+			}
+			nativeName, ok := geminiEventNames[group.Event]
+			if !ok {
+				continue
+			}
+			nativeHooks[nativeName] = renderHookEntries(group.Entries)
+		}
+		if len(nativeHooks) > 0 {
+			settings["hooks"] = nativeHooks
+		}
 	}
 
 	jsonData, err := json.MarshalIndent(settings, "", "  ")

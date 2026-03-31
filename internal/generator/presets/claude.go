@@ -1,7 +1,6 @@
 package presets
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 	"github.com/Goldziher/ai-rulez/internal/logger"
 	"github.com/Goldziher/ai-rulez/internal/markdown"
 	"github.com/Goldziher/ai-rulez/internal/templates"
-	"github.com/samber/oops"
 	"gopkg.in/yaml.v3"
 )
 
@@ -135,7 +133,7 @@ func (g *ClaudePresetGenerator) Generate(content *config.ContentTreeV3, baseDir 
 	return outputs, nil
 }
 
-// claudeEventNames maps hooks.yaml event names to Claude's PascalCase settings.json keys.
+// claudeEventNames maps hooks.yaml event names to Claude's settings.json keys.
 var claudeEventNames = map[string]string{
 	"pre_tool_use":  "PreToolUse",
 	"post_tool_use": "PostToolUse",
@@ -148,60 +146,7 @@ var claudeEventNames = map[string]string{
 // generateHooksSettings emits a .claude/settings.json with Claude-native hooks.
 // The output uses Merge=true so non-hook keys in the existing file survive.
 func (g *ClaudePresetGenerator) generateHooksSettings(cfg *config.ConfigV3, baseDir string) ([]config.OutputFileV3, error) {
-	claudeHooks := make(map[string]interface{})
-	for _, group := range cfg.Hooks.EventGroups() {
-		if len(group.Entries) == 0 {
-			continue
-		}
-		claudeName, ok := claudeEventNames[group.Event]
-		if !ok {
-			continue
-		}
-		claudeHooks[claudeName] = toClaudeHookEntries(group.Entries)
-	}
-
-	wrapper := map[string]interface{}{
-		"hooks": claudeHooks,
-	}
-
-	data, err := json.MarshalIndent(wrapper, "", "  ")
-	if err != nil {
-		return nil, oops.Wrapf(err, "marshal hooks settings")
-	}
-	data = append(data, '\n')
-
-	return []config.OutputFileV3{
-		{
-			Path:    filepath.Join(baseDir, ".claude", "settings.json"),
-			Content: string(data),
-			Merge:   true,
-		},
-	}, nil
-}
-
-// toClaudeHookEntries converts HookEntry slice to Claude's native format.
-// Claude expects: [{"matcher": "...", "hooks": [{"type": "command", "command": "..."}]}]
-func toClaudeHookEntries(entries []config.HookEntry) []interface{} {
-	var result []interface{}
-	for _, entry := range entries {
-		hookObj := map[string]interface{}{
-			"type":    "command",
-			"command": entry.Command,
-		}
-		if entry.Timeout > 0 {
-			hookObj["timeout"] = entry.Timeout
-		}
-
-		group := map[string]interface{}{
-			"hooks": []interface{}{hookObj},
-		}
-		if entry.Matcher != "" {
-			group["matcher"] = entry.Matcher
-		}
-
-		result = append(result, group)
-	}
-	return result
+	return generateHooksFile(cfg.Hooks, claudeEventNames, baseDir, filepath.Join(".claude", "settings.json"), true)
 }
 
 func (g *ClaudePresetGenerator) generateSkillFiles(skill config.ContentFile, content *config.ContentTreeV3, baseDir string, cfg *config.ConfigV3) ([]config.OutputFileV3, error) {

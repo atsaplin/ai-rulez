@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -92,7 +93,25 @@ func (g *CodexPresetGenerator) Generate(content *config.ContentTreeV3, baseDir s
 		})
 	}
 
+	// Generate hooks.json if hooks are configured
+	if cfg.Hooks != nil && !cfg.Hooks.IsEmpty() {
+		hookOutputs, err := generateHooksFile(cfg.Hooks, codexEventNames, baseDir, filepath.Join(".codex", "hooks.json"), false)
+		if err != nil {
+			return nil, fmt.Errorf("generate codex hooks: %w", err)
+		}
+		outputs = append(outputs, hookOutputs...)
+	}
+
 	return outputs, nil
+}
+
+// codexEventNames maps hooks.yaml event names to Codex's hooks.json keys.
+// Codex does not support PreCompact or Notification.
+var codexEventNames = map[string]string{
+	"pre_tool_use":  "PreToolUse",
+	"post_tool_use": "PostToolUse",
+	"stop":          "Stop",
+	"session_start": "SessionStart",
 }
 
 func (g *CodexPresetGenerator) renderAgentsMarkdown(content *config.ContentTreeV3, cfg *config.ConfigV3) string {
