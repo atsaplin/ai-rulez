@@ -1,11 +1,15 @@
 package generator
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"github.com/Goldziher/ai-rulez/internal/logger"
 	"github.com/samber/oops"
 )
+
+// utf8BOM is the byte sequence for a UTF-8 byte order mark.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
 // shallowMergeJSON merges two JSON objects at the top level.
 // Keys from generated overwrite keys in existing. Keys only in existing survive.
@@ -15,6 +19,9 @@ func shallowMergeJSON(existing, generated []byte) ([]byte, error) {
 	if len(existing) == 0 {
 		return generated, nil
 	}
+
+	// Strip UTF-8 BOM if present (some editors on Windows add it)
+	existing = bytes.TrimPrefix(existing, utf8BOM)
 
 	var existingMap map[string]json.RawMessage
 	if err := json.Unmarshal(existing, &existingMap); err != nil {
